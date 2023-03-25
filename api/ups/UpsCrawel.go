@@ -44,11 +44,11 @@ type TrackDetail struct {
 }
 
 type Events struct {
-	location     string
-	gmtDate      string
-	gmtOffset    string
-	gmtTime      string
-	activityScan string
+	Location     string `json:"location"`
+	GmtDate      string `json:"gmtDate"`
+	GmtOffset    string `json:"gmtOffset"`
+	GmtTime      string `json:"gmtTime"`
+	ActivityScan string `json:"activityScan"`
 }
 
 func GetToken() (t Token, e error) {
@@ -99,11 +99,20 @@ func grab(logisticsNo string) ([]byte, error) {
 	request.Header.Add("x-xsrf-token", token.Token_st)
 	request.Header.Add("cookie", "X-CSRF-TOKEN="+token.Token)
 
-	response, _ := client.Do(request)
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
 	if response.StatusCode != 200 {
 		return nil, errors.New("请求错误,状态码" + strconv.Itoa(response.StatusCode))
 	}
-	res, _ := io.ReadAll(response.Body)
+	res, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		Body.Close()
+	}(response.Body)
 	return res, nil
 }
 func Track() func(request []model.TrackRequest) []model.TrackResponse {
@@ -118,8 +127,9 @@ func execute(request []model.TrackRequest) []model.TrackResponse {
 			resultList[i] = model.BuildEmptyTrackResponse(v.LogisticsNo, err.Error(), consts.NO_RECORD)
 			continue
 		}
-		var response Response
-		err = json.Unmarshal(res, &response)
+		response := new(Response)
+		//str := string(res)
+		err = json.Unmarshal(res, response)
 		if err != nil {
 			resultList[i] = model.BuildEmptyTrackResponse(v.LogisticsNo, err.Error(), consts.NO_RECORD)
 			continue
@@ -137,13 +147,13 @@ func execute(request []model.TrackRequest) []model.TrackResponse {
 			resultList[i] = model.BuildEmptyTrackResponse(v.LogisticsNo, "追踪单号与UPS接口返回单号不一致", consts.NO_RECORD)
 			continue
 		}
-		resModel := model.BuildEmptyTrackResponse(v.LogisticsNo, "", consts.NO_RECORD)
+		resModel := model.BuildEmptyTrackResponse(v.LogisticsNo, "", consts.TRANSIT)
 		events := make([]model.Event, len(trackDetail.ShipmentProgressActivities))
 		for idx, v := range trackDetail.ShipmentProgressActivities {
 			location, _ := time.LoadLocation("Asia/Shanghai")
-			t, _ := time.ParseInLocation("2006010215:04:05", v.gmtDate+v.gmtTime, location)
+			t, _ := time.ParseInLocation("2006010215:04:05", v.GmtDate+v.GmtTime, location)
 			eventTime := t.Format("2006-01-02 15:04:05")
-			event := model.Event{Date: eventTime, Location: v.location, Message: v.activityScan}
+			event := model.Event{Date: eventTime, Location: v.Location, Message: v.ActivityScan}
 			events[idx] = event
 		}
 		resModel.EventListEn = events
