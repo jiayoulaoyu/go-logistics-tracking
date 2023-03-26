@@ -149,9 +149,20 @@ func execute(request []model.TrackRequest) []model.TrackResponse {
 		}
 		resModel := model.BuildEmptyTrackResponse(v.LogisticsNo, "", consts.TRANSIT)
 		events := make([]model.Event, len(trackDetail.ShipmentProgressActivities))
+
 		for idx, v := range trackDetail.ShipmentProgressActivities {
-			location, _ := time.LoadLocation("Asia/Shanghai")
+			location, _ := time.LoadLocation("GMT")
 			t, _ := time.ParseInLocation("2006010215:04:05", v.GmtDate+v.GmtTime, location)
+			offsetStr := v.GmtOffset
+			var offset int
+			arr := strings.Split(offsetStr, ":")
+			if len(arr) == 2 {
+				hour, _ := strconv.Atoi(arr[0])
+				minutes, _ := strconv.Atoi(arr[1])
+				offset = hour*3600 + minutes*60
+			}
+			utcZone := time.FixedZone("UTC", offset)
+			t = t.In(utcZone)
 			eventTime := t.Format("2006-01-02 15:04:05")
 			event := model.Event{Date: eventTime, Location: v.Location, Message: v.ActivityScan}
 			events[idx] = event
